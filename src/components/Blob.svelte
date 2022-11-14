@@ -1,8 +1,6 @@
 <script>
-	import { onMount } from "svelte";
-  import { renderable } from "../routes/+server";
-
-  
+	import { onDestroy, onMount } from "svelte";
+  import { renderable, key } from "../routes/+server";
 
   export let startPosition = [50, 50];
   export let startVelocity = [0, 0];
@@ -19,29 +17,32 @@
   export let mx = 0;
   export let my = 0;
 
-  //input: 2x1
+  //input: 5x1
+  let inp = [x, y, velocity[0], mx, my];
+
+  //output: 2x1
+  let outp = [x, y];
 
   //hidden: 2x10
-  let weights1 = new Array(4)
+  let weights = new Array(outp.length)
   .fill(0)
-  .map(e=>(new Array(2)
+  .map(e=>(new Array(inp.length)
   .fill(0)
-  .map( e => Math.random() - 0.5)));
+  .map( e => (Math.random() - 0.5))));
 
-  let biases = new Array(4).fill(0).map(e => 100 * (Math.random() - 0.5));
+  let biases = new Array(inp.length).fill(0).map(e => 2 * (Math.random() - 0.5));
 
-  renderable((context) => {
-
+  const rndr = (context) => {
     x += velocity[0];
     y += velocity[1];
 
     context.lineCap = 'round';
     context.beginPath();
-		context.fillStyle = color;
-		context.strokeStyle = color;
-		context.lineWidth = thickness;
-		context.arc(x, y, size, 0, Math.PI * 2);
-		context.stroke();
+    context.fillStyle = color;
+    context.strokeStyle = color;
+    context.lineWidth = thickness;
+    context.arc(x, y, size, 0, Math.PI * 2);
+    context.stroke();
 
     velocity[1] += gravity;
 
@@ -51,53 +52,50 @@
     if (x < 0) {
       x = 500;
     }
-    if (y > 497) {
-      y = 497;
-      velocity = scale(
-          normalize(plus(wSum([
-            x/500,
-            y/500,
-            mx,
-            my
-          ], weights1), biases)),
-      5);
-      velocity[1] > 0 ? velocity[1] *= -1: velocity[1] = velocity[1];
-    }
-  });
-
-  function scale(v, m) {
-    return [v[0] * m, v[1] * m];
-  }
-
-  function plus(a, b) {
-    return a.map((val, i) => {
-      return val + b[i];
-    })
-  }
-
-  function normalize(v) {
-    const mag = Math.sqrt(v[0]*v[0] + v[1]*v[1]);
-    return [v[0] / mag, v[1] / mag];
-  }
-
-  function wSum(input, weights) {
-    const sum = new Array(weights[0].length).fill(0);
-    for (let h = 0; h < weights[0].length; h++) {
-      for (let i = 0; i < input.length; i++) {
-        sum[h] += weights[i][h] * input[i];
+    if (y < 0) {
+      if (velocity[1] < 0) {
+        velocity[1] *= -1;
       }
     }
 
-    return sum;
+    if (y > 497) {
+      y = 497;
+      velocity = activation([
+        x,
+        y,
+        velocity[0],
+        mx,
+        my
+      ], weights, biases);
+
+      velocity = [velocity[0] * 1000, velocity[1] * 1000];
+    }
+  }
+
+  export const rm = renderable(rndr);
+
+  onDestroy(() => {
+    rm();
+  })
+
+  function activation(input, weights, bias) {
+    const out = [];
+
+    for (let r = 0; r < weights.length; r++) {
+      const x = dot(weights[r], input) + bias[r];
+      out.push(
+        1 / (1 + (Math.E ^ (-x)))
+      );
+    }
+
+    return out;
   }
 
   function dot (A, B) {
-    var result = new Array(A.length).fill(0).map(row => new Array(B[0].length).fill(0));
-
-    return result.map((row, i) => {
-      return row.map((val, j) => {
-        return A[i].reduce((sum, elm, k) => sum + (elm*B[k][j]) ,0)
-      })
-    })
-}
+    let sum = 0;
+    for(let i = 0; i < A.length; i++) {
+      sum += A[i] * B[i];
+    }
+    return sum;
+  }
 </script>
